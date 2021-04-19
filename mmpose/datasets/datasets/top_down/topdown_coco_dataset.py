@@ -90,6 +90,8 @@ class TopDownCocoDataset(TopDownBaseDataset):
             ],
             dtype=np.float32).reshape((self.ann_info['num_joints'], 1))
 
+        # 'https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/'
+        # 'pycocotools/cocoeval.py#L523'
         self.sigmas = np.array([
             .26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07,
             .87, .87, .89, .89
@@ -188,6 +190,7 @@ class TopDownCocoDataset(TopDownBaseDataset):
                 valid_objs.append(obj)
         objs = valid_objs
 
+        bbox_id = 0
         rec = []
         for obj in objs:
             if 'keypoints' not in obj:
@@ -215,8 +218,10 @@ class TopDownCocoDataset(TopDownBaseDataset):
                 'joints_3d': joints_3d,
                 'joints_3d_visible': joints_3d_visible,
                 'dataset': self.dataset_name,
-                'bbox_score': 1
+                'bbox_score': 1,
+                'bbox_id': bbox_id
             })
+            bbox_id = bbox_id + 1
 
         return rec
 
@@ -246,7 +251,7 @@ class TopDownCocoDataset(TopDownBaseDataset):
 
         # pixel std is 200.0
         scale = np.array([w / 200.0, h / 200.0], dtype=np.float32)
-
+        # padding to include proper amount of context
         scale = scale * 1.25
 
         return center, scale
@@ -264,7 +269,7 @@ class TopDownCocoDataset(TopDownBaseDataset):
         print(f'=> Total boxes: {len(all_boxes)}')
 
         kpt_db = []
-        num_boxes = 0
+        bbox_id = 0
         for det_res in all_boxes:
             if det_res['category_id'] != 1:
                 continue
@@ -276,8 +281,6 @@ class TopDownCocoDataset(TopDownBaseDataset):
 
             if score < self.det_bbox_thr:
                 continue
-
-            num_boxes = num_boxes + 1
 
             center, scale = self._xywh2cs(*box[:4])
             joints_3d = np.zeros((num_joints, 3), dtype=np.float32)
@@ -291,10 +294,12 @@ class TopDownCocoDataset(TopDownBaseDataset):
                 'bbox_score': score,
                 'dataset': self.dataset_name,
                 'joints_3d': joints_3d,
-                'joints_3d_visible': joints_3d_visible
+                'joints_3d_visible': joints_3d_visible,
+                'bbox_id': bbox_id
             })
+            bbox_id = bbox_id + 1
         print(f'=> Total boxes after filter '
-              f'low score@{self.det_bbox_thr}: {num_boxes}')
+              f'low score@{self.det_bbox_thr}: {bbox_id}')
         return kpt_db
 
     def evaluate(self, outputs, res_folder, metric='mAP', **kwargs):
@@ -308,15 +313,15 @@ class TopDownCocoDataset(TopDownBaseDataset):
             heatmap width: W
 
         Args:
-            outputs (list(preds, boxes, image_path, heatmap))
-                :preds (np.ndarray[1,K,3]): The first two dimensions are
+            outputs (list(dict))
+                :preds (np.ndarray[N,K,3]): The first two dimensions are
                     coordinates, score is the third dimension of the array.
-                :boxes (np.ndarray[1,6]): [center[0], center[1], scale[0]
+                :boxes (np.ndarray[N,6]): [center[0], center[1], scale[0]
                     , scale[1],area, score]
-                :image_path (list[str]): For example, [ '/', 'v','a', 'l',
-                    '2', '0', '1', '7', '/', '0', '0', '0', '0', '0',
-                    '0', '3', '9', '7', '1', '3', '3', '.', 'j', 'p', 'g']
-                :heatmap (np.ndarray[N, K, H, W]): model output heatmap.
+                :image_paths (list[str]): For example, ['data/coco/val2017
+                    /000000393226.jpg']
+                :heatmap (np.ndarray[N, K, H, W]): model output heatmap
+                :bbox_id (list(int)).
             res_folder (str): Path of directory to save the results.
             metric (str | list[str]): Metric to be performed. Defaults: 'mAP'.
 
@@ -332,18 +337,26 @@ class TopDownCocoDataset(TopDownBaseDataset):
         res_file = os.path.join(res_folder, 'result_keypoints.json')
 
         kpts = defaultdict(list)
-        for preds, boxes, image_path, _ in outputs:
-            str_image_path = ''.join(image_path)
-            image_id = self.name2id[str_image_path[len(self.img_prefix):]]
 
-            kpts[image_id].append({
-                'keypoints': preds[0],
-                'center': boxes[0][0:2],
-                'scale': boxes[0][2:4],
-                'area': boxes[0][4],
-                'score': boxes[0][5],
-                'image_id': image_id,
-            })
+        for output in outputs:
+            preds = output['preds']
+            boxes = output['boxes']
+            image_paths = output['image_paths']
+            bbox_ids = output['bbox_ids']
+
+            batch_size = len(image_paths)
+            for i in range(batch_size):
+                image_id = self.name2id[image_paths[i][len(self.img_prefix):]]
+                kpts[image_id].append({
+                    'keypoints': preds[i],
+                    'center': boxes[i][0:2],
+                    'scale': boxes[i][2:4],
+                    'area': boxes[i][4],
+                    'score': boxes[i][5],
+                    'image_id': image_id,
+                    'bbox_id': bbox_ids[i]
+                })
+        kpts = self._sort_and_unique_bboxes(kpts)
 
         # rescoring and oks nms
         num_joints = self.ann_info['num_joints']
@@ -441,3 +454,14 @@ class TopDownCocoDataset(TopDownBaseDataset):
         info_str = list(zip(stats_names, coco_eval.stats))
 
         return info_str
+
+    def _sort_and_unique_bboxes(self, kpts, key='bbox_id'):
+        """sort kpts and remove the repeated ones."""
+        for img_id, persons in kpts.items():
+            num = len(persons)
+            kpts[img_id] = sorted(kpts[img_id], key=lambda x: x[key])
+            for i in range(num - 1, 0, -1):
+                if kpts[img_id][i][key] == kpts[img_id][i - 1][key]:
+                    del kpts[img_id][i]
+
+        return kpts

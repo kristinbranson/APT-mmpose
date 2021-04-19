@@ -21,21 +21,13 @@ For installation instructions, please see [install.md](install.md).
 
 ## Prepare Datasets
 
-MMPose supported datasets:
+MMPose supports multiple tasks. Please follow the corresponding guidelines for data preparation.
 
-- [COCO](http://cocodataset.org/)
-- [COCO-WholeBody](https://github.com/jin-s13/COCO-WholeBody/)
-- [MPII](http://human-pose.mpi-inf.mpg.de/)
-- [MPII-TRB](https://github.com/kennymckormick/Triplet-Representation-of-human-Body)
-- [AI Challenger](https://github.com/AIChallenger/AI_Challenger_2017)
-- [OCHuman](https://github.com/liruilong940607/OCHumanApi)
-- [CrowdPose](https://github.com/Jeff-sjtu/CrowdPose)
-- [OneHand10K](https://www.yangangwang.com/papers/WANG-MCC-2018-10.html)
-- [FreiHand](https://lmb.informatik.uni-freiburg.de/projects/freihand/)
-- [CMU Panoptic HandDB](http://domedb.perception.cs.cmu.edu/handdb.html)
-- [InterHand2.6M](https://mks0601.github.io/InterHand2.6M/)
-
-Please follow [DATA Preparation](data_preparation.md) to prepare the data.
+- [2D Body Keypoint](/docs/tasks/2d_body_keypoint.md)
+- [2D Hand Keypoint](/docs/tasks/2d_hand_keypoint.md)
+- [2D Face Keypoint](/docs/tasks/2d_face_keypoint.md)
+- [2D WholeBody Keypoint](/docs/tasks/2d_wholebody_keypoint.md)
+- [3D Human Mesh Recovery](/docs/tasks/3d_body_mesh.md)
 
 ## Inference with Pre-trained Models
 
@@ -244,6 +236,6 @@ python tools/benchmark_inference.py ${MMPOSE_CONFIG_FILE}
 
 ## Tutorials
 
-Currently, we provide some tutorials for users to [finetune model](tutorials/1_finetune.md),
+Currently, we provide some tutorials for users to [learn about configs](tutorials/0_config.md), [finetune model](tutorials/1_finetune.md),
 [add new dataset](tutorials/2_new_dataset.md), [customize data pipelines](tutorials/3_data_pipeline.md),
 [add new modules](tutorials/4_new_modules.md), [export a model to ONNX](tutorials/5_export_model.md) and [customize runtime settings](tutorials/6_customize_runtime.md).

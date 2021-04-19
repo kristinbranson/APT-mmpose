@@ -1,24 +1,40 @@
 from ...deprecated import (TopDownFreiHandDataset, TopDownOneHand10KDataset,
                            TopDownPanopticDataset)
-from .bottom_up import BottomUpCocoDataset, BottomUpCrowdPoseDataset, BottomUpAPTDataset
-from .hand import (FreiHandDataset, InterHand2DDataset, OneHand10KDataset,
-                   PanopticDataset)
+from .animal import (AnimalATRWDataset, AnimalFlyDataset, AnimalHorse10Dataset,
+                     AnimalLocustDataset, AnimalMacaqueDataset,
+                     AnimalZebraDataset)
+from .body3d import Body3DH36MDataset
+from .bottom_up import (BottomUpAicDataset, BottomUpCocoDataset,
+                        BottomUpCrowdPoseDataset, BottomUpMhpDataset,
+						BottomUpAPTDataset)
+from .face import (Face300WDataset, FaceAFLWDataset, FaceCOFWDataset,
+                   FaceWFLWDataset)
+from .fashion import DeepFashionDataset
+from .hand import (FreiHandDataset, InterHand2DDataset, InterHand3DDataset,
+                   OneHand10KDataset, PanopticDataset)
 from .mesh import (MeshAdversarialDataset, MeshH36MDataset, MeshMixDataset,
                    MoshDataset)
 from .top_down import (TopDownAicDataset, TopDownCocoDataset,
                        TopDownCocoWholeBodyDataset, TopDownCrowdPoseDataset,
-                       TopDownJhmdbDataset, TopDownMpiiDataset,
-                       TopDownMpiiTrbDataset, TopDownOCHumanDataset,
-                       TopDownPoseTrack18Dataset, TopDownAPTDataset)
+                       TopDownJhmdbDataset, TopDownMhpDataset,
+                       TopDownMpiiDataset, TopDownMpiiTrbDataset,
+                       TopDownOCHumanDataset, TopDownPoseTrack18Dataset,
+					   TopDownAPTDataset)
 
-__all__ = ['TopDownAPTDataset','BottomUpAPTDataset'
-    'TopDownCocoDataset', 'BottomUpCocoDataset', 'TopDownMpiiDataset',
-    'TopDownMpiiTrbDataset', 'OneHand10KDataset', 'PanopticDataset',
-    'FreiHandDataset', 'InterHand2DDataset', 'TopDownOCHumanDataset',
+__all__ = [
+    'TopDownCocoDataset', 'BottomUpCocoDataset', 'BottomUpMhpDataset',
+    'BottomUpAicDataset', 'TopDownMpiiDataset', 'TopDownMpiiTrbDataset',
+    'OneHand10KDataset', 'PanopticDataset', 'FreiHandDataset',
+    'InterHand2DDataset', 'InterHand3DDataset', 'TopDownOCHumanDataset',
     'TopDownAicDataset', 'TopDownCocoWholeBodyDataset', 'MeshH36MDataset',
     'MeshMixDataset', 'MoshDataset', 'MeshAdversarialDataset',
     'TopDownCrowdPoseDataset', 'BottomUpCrowdPoseDataset',
     'TopDownFreiHandDataset', 'TopDownOneHand10KDataset',
     'TopDownPanopticDataset', 'TopDownPoseTrack18Dataset',
-    'TopDownJhmdbDataset'
+    'TopDownJhmdbDataset', 'TopDownMhpDataset', 'DeepFashionDataset',
+    'Face300WDataset', 'FaceAFLWDataset', 'FaceWFLWDataset', 'FaceCOFWDataset',
+    'Body3DH36MDataset', 'AnimalHorse10Dataset', 'AnimalMacaqueDataset',
+    'AnimalFlyDataset', 'AnimalLocustDataset', 'AnimalZebraDataset',
+    'AnimalATRWDataset',
+    'TopDownAPTDataset','BottomUpAPTDataset'
 ]

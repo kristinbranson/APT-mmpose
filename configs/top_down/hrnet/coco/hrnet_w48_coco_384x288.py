@@ -14,10 +14,9 @@ optimizer_config = dict(grad_clip=None)
 # learning policy
 lr_config = dict(
     policy='step',
-    warmup=None,
-    # warmup='linear',
-    # warmup_iters=500,
-    # warmup_ratio=0.001,
+    warmup='linear',
+    warmup_iters=500,
+    warmup_ratio=0.001,
     step=[170, 200])
 total_epochs = 210
 log_config = dict(
@@ -77,14 +76,13 @@ model = dict(
         out_channels=channel_cfg['num_output_channels'],
         num_deconv_layers=0,
         extra=dict(final_conv_kernel=1, ),
-    ),
+        loss_keypoint=dict(type='JointsMSELoss', use_target_weight=True)),
     train_cfg=dict(),
     test_cfg=dict(
         flip_test=True,
         post_process='default',
         shift_heatmap=True,
-        modulate_kernel=11),
-    loss_pose=dict(type='JointsMSELoss', use_target_weight=True))
+        modulate_kernel=11))
 
 data_cfg = dict(
     image_size=[288, 384],

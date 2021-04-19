@@ -103,6 +103,7 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
         self.ann_info['joint_weights'] = np.ones(
             (self.ann_info['num_joints'], 1), dtype=np.float32)
 
+        self.dataset_name = 'mpii_trb'
         self.db = self._get_db(ann_file)
         self.image_set = set(x['image_file'] for x in self.db)
         self.num_images = len(self.image_set)
@@ -116,12 +117,13 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
             data = json.load(f)
         tmpl = dict(
             image_file=None,
+            bbox_id=None,
             center=None,
             scale=None,
             rotation=0,
             joints_3d=None,
             joints_3d_visible=None,
-            dataset='mpii_trb')
+            dataset=self.dataset_name)
 
         imid2info = {
             int(osp.splitext(x['file_name'])[0]): x
@@ -134,6 +136,7 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
         for anno in data['annotations']:
             newitem = cp.deepcopy(tmpl)
             image_id = anno['image_id']
+            newitem['bbox_id'] = anno['id']
             newitem['image_file'] = os.path.join(
                 self.img_prefix, imid2info[image_id]['file_name'])
 
@@ -159,6 +162,7 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
             if 'headbox' in anno:
                 newitem['headbox'] = anno['headbox']
             gt_db.append(newitem)
+        gt_db = sorted(gt_db, key=lambda x: x['bbox_id'])
 
         return gt_db
 
@@ -193,15 +197,16 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
             heatmap width: W
 
         Args:
-            outputs(list(preds, boxes, image_path, heatmap)):
+            outputs(list(preds, boxes, image_paths, heatmap)):
 
-                * preds(np.ndarray[1,K,3]): The first two dimensions are
+                * preds (np.ndarray[N,K,3]): The first two dimensions are
                   coordinates, score is the third dimension of the array.
-                * boxes(np.ndarray[1,6]): [center[0], center[1], scale[0]
+                * boxes (np.ndarray[N,6]): [center[0], center[1], scale[0]
                   , scale[1],area, score]
-                * image_path(list[str]): For example, ['0', '0',
-                  '0', '0', '0', '1', '1', '6', '3', '.', 'j', 'p', 'g']
+                * image_paths (list[str]): For example, ['/val2017/000000
+                  397133.jpg']
                 * heatmap (np.ndarray[N, K, H, W]): model output heatmap.
+                * bbox_ids (list[str]): For example, ['27407']
             res_folder(str): Path of directory to save the results.
             metric (str | list[str]): Metrics to be performed.
                 Defaults: 'PCKh'.
@@ -218,19 +223,27 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
         res_file = os.path.join(res_folder, 'result_keypoints.json')
 
         kpts = []
+        for output in outputs:
+            preds = output['preds']
+            boxes = output['boxes']
+            image_paths = output['image_paths']
+            bbox_ids = output['bbox_ids']
 
-        for preds, boxes, image_path, _ in outputs:
-            str_image_path = ''.join(image_path)
-            image_id = int(osp.basename(osp.splitext(str_image_path)[0]))
+            batch_size = len(image_paths)
+            for i in range(batch_size):
+                str_image_path = image_paths[i]
+                image_id = int(osp.basename(osp.splitext(str_image_path)[0]))
 
-            kpts.append({
-                'keypoints': preds[0].tolist(),
-                'center': boxes[0][0:2].tolist(),
-                'scale': boxes[0][2:4].tolist(),
-                'area': float(boxes[0][4]),
-                'score': float(boxes[0][5]),
-                'image_id': image_id,
-            })
+                kpts.append({
+                    'keypoints': preds[i].tolist(),
+                    'center': boxes[i][0:2].tolist(),
+                    'scale': boxes[i][2:4].tolist(),
+                    'area': float(boxes[i][4]),
+                    'score': float(boxes[i][5]),
+                    'image_id': image_id,
+                    'bbox_id': bbox_ids[i]
+                })
+        kpts = self._sort_and_unique_bboxes(kpts)
 
         self._write_keypoint_results(kpts, res_file)
         info_str = self._report_metric(res_file)
@@ -274,3 +287,13 @@ class TopDownMpiiTrbDataset(TopDownBaseDataset):
         info_str.append(('Contour_acc', contour.item()))
         info_str.append(('PCKh', mean.item()))
         return info_str
+
+    def _sort_and_unique_bboxes(self, kpts, key='bbox_id'):
+        """sort kpts and remove the repeated ones."""
+        kpts = sorted(kpts, key=lambda x: x[key])
+        num = len(kpts)
+        for i in range(num - 1, 0, -1):
+            if kpts[i][key] == kpts[i - 1][key]:
+                del kpts[i]
+
+        return kpts
