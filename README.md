@@ -1,3 +1,7 @@
+## MMPose adapated for APT (https://github.com/kristinbranson/APT)
+
+Original MMPose is available at https://github.com/open-mmlab/mmpose
+
 <div align="center">
     <img src="resources/mmpose-logo.png" width="400"/>
 </div>
