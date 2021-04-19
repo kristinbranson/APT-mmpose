@@ -22,6 +22,6 @@ __all__ = [
     'TopDownCrowdPoseDataset', 'BottomUpCrowdPoseDataset',
     'TopDownFreiHandDataset', 'TopDownOneHand10KDataset',
     'TopDownPanopticDataset', 'TopDownPoseTrack18Dataset',
-    'TopDownJhmdbDataset', 'build_dataloader', 'build_dataset', 'Compose',
+    'TopDownJhmdbDataset', 'build_dataloader', 'build_dataset', 'Compose','TopDownAPTDataset',
     'DistributedSampler', 'DATASETS', 'PIPELINES'
 ]

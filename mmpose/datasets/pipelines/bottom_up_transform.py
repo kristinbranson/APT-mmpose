@@ -6,7 +6,7 @@ import numpy as np
 from mmpose.core.post_processing import get_affine_transform
 from mmpose.datasets.registry import PIPELINES
 from .shared_transform import Compose
-
+from .apt_transform import APTtransform
 
 def get_warp_matrix(theta, size_input, size_dst, size_target):
     """Calculate the transformation matrix under the constraint of unbiased.
@@ -214,7 +214,7 @@ class HeatmapGenerator:
         for p in joints:
             for idx, pt in enumerate(p):
                 if pt[2] > 0:
-                    x, y = int(pt[0]), int(pt[1])
+                    x, y = int(np.round(pt[0])), int(np.round(pt[1]))
                     if x < 0 or y < 0 or \
                        x >= self.output_res or y >= self.output_res:
                         continue
@@ -281,9 +281,9 @@ class JointsEncoder:
         for i in range(len(joints)):
             tot = 0
             for idx, pt in enumerate(joints[i]):
-                x, y = int(pt[0]), int(pt[1])
-                if (pt[2] > 0 and 0 <= y < self.output_res
-                        and 0 <= x < self.output_res):
+                if (pt[2] > 0 and 0 <= pt[1] < self.output_res
+                        and 0 <= pt[0] < self.output_res):
+                    x, y = int(pt[0]), int(pt[1])
                     if self.tag_per_joint:
                         visible_kpts[i][tot] = \
                             (idx * output_res**2 + y * output_res + x, 1)
@@ -394,7 +394,7 @@ class BottomUpRandomAffine:
         assert isinstance(joints, list)
         assert len(mask) == len(joints)
         assert len(mask) == len(self.output_size), (len(mask),
-                                                    len(self.output_size),
+                                                len(self.output_size),
                                                     self.output_size)
 
         height, width = image.shape[:2]

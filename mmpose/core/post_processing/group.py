@@ -6,7 +6,7 @@
 import numpy as np
 import torch
 from munkres import Munkres
-
+import multiprocessing
 from mmpose.core.evaluation import post_dark_udp
 
 
@@ -62,6 +62,12 @@ def _match_by_tag(inp, params):
         tags = tag_k[idx]
         joints = np.concatenate((loc_k[idx], val_k[idx, :, None], tags), 1)
         mask = joints[:, 2] > params.detection_threshold
+
+        # APT update to have minimum number of detections
+        if np.count_nonzero(mask) < params.min_num_people:
+            order = np.flip(np.argsort(joints[:, 2]))
+            mask[order[:params.min_num_people]] = True
+
         tags = tags[mask]
         joints = joints[mask]
 
@@ -75,7 +81,10 @@ def _match_by_tag(inp, params):
                 tag_dict[key] = [tag]
         else:
             grouped_keys = list(joint_dict.keys())[:params.max_num_people]
-            grouped_tags = [np.mean(tag_dict[i], axis=0) for i in grouped_keys]
+            grouped_tags = [np.mean(tag_dict[j], axis=0) for j in grouped_keys]
+            prev_joints = params.joint_order[:i]
+            grouped_joints = [joint_dict[j][prev_joints,:2] for j in grouped_keys]
+            grouped_joints = [np.mean(g[g[:,:].sum(axis=1)>0,:],axis=0) for g in grouped_joints]
 
             if (params.ignore_too_much
                     and len(grouped_keys) == params.max_num_people):
@@ -83,6 +92,22 @@ def _match_by_tag(inp, params):
 
             diff = joints[:, None, 3:] - np.array(grouped_tags)[None, :, :]
             diff_normed = np.linalg.norm(diff, ord=2, axis=2)
+
+            if params.dist_grouping:
+                # For APT, add distance based condition to avoid joining far off points. AE is able to give different tag values to close by animals, but can at times give same tag value to animals that are far apart
+
+                # Find the distance of current joints to previously grouped joints.
+                diff_joint = joints[:,None,:2] - np.array(grouped_joints)[None,:,:]
+                diff_joint_normed = np.linalg.norm(diff_joint,ord=2,axis=2)
+                # Take the 25th percentile distance as the cutoff distance so that this factor can scale to different sized animals/resolutions.
+                med_joint = np.percentile(diff_joint_normed.flatten(), 25)
+                dd = diff_joint_normed-med_joint
+                # The distance factor joint_logistic will be close to 0 if the dd<<med_joint, while will be close to 4 if dd>>med_joint.
+                joint_logistic = 4 / (1 + np.exp(-dd / med_joint*4))
+                assert ~np.any(np.isnan(joint_logistic)), 'This should not happen'
+
+                diff_normed = diff_normed + joint_logistic
+
             diff_saved = np.copy(diff_normed)
 
             if params.use_detection_val:
@@ -131,6 +156,16 @@ class _Params:
         self.use_detection_val = cfg['use_detection_val']
         self.ignore_too_much = cfg['ignore_too_much']
 
+        if 'min_num_people' in cfg.keys():
+            self.min_num_people = cfg['min_num_people']
+        else:
+            self.min_num_people = 0
+
+        if 'dist_grouping' in cfg.keys():
+            self.dist_grouping = cfg['dist_grouping']
+        else:
+            self.dist_grouping = False
+
         if self.num_joints == 17:
             self.joint_order = [
                 i - 1 for i in
@@ -149,6 +184,7 @@ class HeatmapParser:
         self.pool = torch.nn.MaxPool2d(cfg['nms_kernel'], 1,
                                        cfg['nms_padding'])
         self.use_udp = cfg.get('use_udp', False)
+        self.dist_grouping = cfg.get('dist_grouping',False)
 
     def nms(self, heatmaps):
         """Non-Maximum Suppression for heatmaps.
@@ -276,7 +312,7 @@ class HeatmapParser:
         return ans
 
     @staticmethod
-    def refine(heatmap, tag, keypoints, use_udp=False):
+    def refine(heatmap, tag, keypoints, use_udp=False, adjust_dist=False):
         """Given initial keypoint predictions, we identify missing joints.
 
         Note:
@@ -312,12 +348,25 @@ class HeatmapParser:
         prev_tag = np.mean(tags, axis=0)
         ans = []
 
+        # For APT, add distances
+        if adjust_dist:
+            # Add a distance penalty during refining. The penalty is close to 0 at pixels close to the centroid of the group. The max value the penalty can take is 4
+            med_tag = keypoints[:,:2]
+            med_tag = np.mean(med_tag[med_tag[:,0]>0.001,:],axis=0)
+            x_dist, y_dist = np.meshgrid(range(W),range(H))
+            dist_mat = np.sqrt((x_dist-med_tag[0])**2 + (y_dist-med_tag[1])**2)
+            dist_mat = 8*(1/(1+np.exp(-dist_mat/(H+W)*8))-0.5)
+        else:
+            dist_mat = np.zeros([H,W])
+
         for _heatmap, _tag in zip(heatmap, tag):
             # distance of all tag values with mean tag of
             # current detected people
             distance_tag = (((_tag -
                               prev_tag[None, None, :])**2).sum(axis=2)**0.5)
-            norm_heatmap = _heatmap - np.round(distance_tag)
+            # norm_heatmap = _heatmap - np.round(distance_tag) - dist_mat
+            # rounding off as int is faster. MK 20210122
+            norm_heatmap = _heatmap - (distance_tag+0.5).astype('int') - dist_mat
 
             # find maximum position
             y, x = np.unravel_index(np.argmax(norm_heatmap), _heatmap.shape)
@@ -388,14 +437,14 @@ class HeatmapParser:
         if refine:
             ans = ans[0]
             # for every detected person
+            heatmap_numpy = heatmaps[0].cpu().numpy()
+            tag_numpy = tags[0].cpu().numpy()
+            if not self.tag_per_joint:
+                tag_numpy = np.tile(tag_numpy,
+                                    (self.params.num_joints, 1, 1, 1))
             for i in range(len(ans)):
-                heatmap_numpy = heatmaps[0].cpu().numpy()
-                tag_numpy = tags[0].cpu().numpy()
-                if not self.tag_per_joint:
-                    tag_numpy = np.tile(tag_numpy,
-                                        (self.params.num_joints, 1, 1, 1))
                 ans[i] = self.refine(
-                    heatmap_numpy, tag_numpy, ans[i], use_udp=self.use_udp)
+                heatmap_numpy, tag_numpy, ans[i], use_udp=self.use_udp, adjust_dist=self.dist_grouping)
             ans = [ans]
 
         return ans, scores

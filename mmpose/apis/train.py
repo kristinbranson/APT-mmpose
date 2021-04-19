@@ -7,6 +7,7 @@ from mmpose.core import (DistEvalHook, EvalHook, Fp16OptimizerHook,
 from mmpose.core.distributed_wrapper import DistributedDataParallelWrapper
 from mmpose.datasets import build_dataloader, build_dataset
 from mmpose.utils import get_root_logger
+import os
 
 
 def train_model(model,

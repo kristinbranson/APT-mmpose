@@ -66,7 +66,7 @@ class BottomUpCocoDataset(BottomUpBaseDataset):
                 1., 1., 1., 1., 1., 1., 1., 1.2, 1.2, 1.5, 1.5, 1., 1., 1.2,
                 1.2, 1.5, 1.5
             ],
-            dtype=np.float32).reshape((self.ann_info['num_joints'], 1))
+            dtype=np.float32).reshape((17, 1))
 
         self.sigmas = np.array([
             .26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07,

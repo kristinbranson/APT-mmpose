@@ -30,6 +30,8 @@ def single_gpu_test(model, data_loader):
     for data in data_loader:
         with torch.no_grad():
             result = model(return_loss=False, **data)
+            result = list(result[:-1])
+            result.append(0) # throw away hmaps because they take up a lot of memory and are not used.
         results.append(result)
 
         # use the first key as main key to calculate the batch size
